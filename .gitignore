@@ -1,0 +1,41 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.dylib
+finder-plus
+test_runner
+
+# Raylib build artifacts
+raylib/src/*.o
+raylib/src/*.a
+
+# IDE/Editor
+.vscode/
+*.swp
+*.swo
+*~
+.idea/
+*.xcodeproj/
+*.xcworkspace/
+
+# macOS
+.DS_Store
+._*
+
+# Configuration (local)
+*.local.json
+.env
+
+# Models (too large for git)
+models/*.gguf
+models/*.bin
+
+# md files
+CLAUDE.md
+AGENTS.md
+SPEC.md
+TASKS.md
+ROADMAP.md
+SESSION_HISTORY.md
