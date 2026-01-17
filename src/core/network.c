@@ -351,8 +351,10 @@ int network_connect(NetworkManager *mgr, const ConnectionProfile *profile)
     // Copy initial path
     if (profile->remote_path[0] != '\0') {
         strncpy(conn->current_path, profile->remote_path, NETWORK_PATH_MAX - 1);
+        conn->current_path[NETWORK_PATH_MAX - 1] = '\0';
     } else {
-        strcpy(conn->current_path, "/");
+        strncpy(conn->current_path, "/", NETWORK_PATH_MAX - 1);
+        conn->current_path[NETWORK_PATH_MAX - 1] = '\0';
     }
 
     mgr->connection_count++;

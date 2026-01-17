@@ -1,6 +1,7 @@
 #include "duplicates.h"
 #include "embeddings.h"
 #include "ai_common.h"
+#include "../platform/trash.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -441,7 +442,8 @@ static void find_similar_images(FileList *list, DuplicateAnalysis *analysis,
                                  DuplicateProgressCallback progress, void *user_data)
 {
     // Filter to only images
-    int *image_indices = malloc(list->count * sizeof(int));
+    int *image_indices = malloc((size_t)list->count * sizeof(int));
+    if (!image_indices) return;
     int image_count = 0;
 
     for (int i = 0; i < list->count; i++) {
@@ -467,7 +469,11 @@ static void find_similar_images(FileList *list, DuplicateAnalysis *analysis,
 
     // Group similar images (Hamming distance threshold)
     int max_distance = (int)((1.0f - config->similarity_threshold) * 64); // 64 bits total
-    bool *processed = calloc(image_count, sizeof(bool));
+    bool *processed = calloc((size_t)image_count, sizeof(bool));
+    if (!processed) {
+        free(image_indices);
+        return;
+    }
 
     for (int i = 0; i < image_count; i++) {
         if (processed[i]) continue;
@@ -517,7 +523,8 @@ static void find_similar_text(FileList *list, DuplicateAnalysis *analysis,
                                DuplicateProgressCallback progress, void *user_data)
 {
     // Filter to only text files
-    int *text_indices = malloc(list->count * sizeof(int));
+    int *text_indices = malloc((size_t)list->count * sizeof(int));
+    if (!text_indices) return;
     int text_count = 0;
 
     for (int i = 0; i < list->count; i++) {
@@ -572,7 +579,13 @@ static void find_similar_text(FileList *list, DuplicateAnalysis *analysis,
     }
 
     // Group similar text files
-    bool *processed = calloc(text_count, sizeof(bool));
+    bool *processed = calloc((size_t)text_count, sizeof(bool));
+    if (!processed) {
+        free(embeddings);
+        embedding_engine_destroy(engine);
+        free(text_indices);
+        return;
+    }
 
     for (int i = 0; i < text_count; i++) {
         if (processed[i]) continue;
@@ -836,17 +849,15 @@ int duplicate_cleanup_group(DuplicateGroup *group, bool use_trash)
     for (int i = 0; i < group->file_count; i++) {
         if (group->files[i].is_suggested_keep) continue;
 
-        int result;
+        bool success;
         if (use_trash) {
-            // Move to trash using macOS API
-            char cmd[2048];
-            snprintf(cmd, sizeof(cmd), "osascript -e 'tell app \"Finder\" to delete POSIX file \"%s\"' 2>/dev/null", group->files[i].path);
-            result = system(cmd);
+            // Move to trash using native macOS API (safe from shell injection)
+            success = platform_move_to_trash(group->files[i].path);
         } else {
-            result = remove(group->files[i].path);
+            success = (remove(group->files[i].path) == 0);
         }
 
-        if (result == 0) deleted++;
+        if (success) deleted++;
     }
 
     return deleted;

@@ -1,6 +1,7 @@
 #include "operations.h"
 #include "filesystem.h"
 #include "../platform/clipboard.h"
+#include "../platform/trash.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -365,16 +366,8 @@ OperationResult file_delete(const char *path)
         return OP_ERROR_NOT_FOUND;
     }
 
-    // Move to Trash on macOS
-    // We use a system command for reliable Trash handling
-    char cmd[8192];
-    snprintf(cmd, sizeof(cmd),
-             "osascript -e 'tell application \"Finder\" to delete POSIX file \"%s\"' 2>/dev/null",
-             path);
-
-    int result = system(cmd);
-    if (result != 0) {
-        // Fallback: permanently delete if Trash move fails
+    // Move to Trash using native macOS API (safe from shell injection)
+    if (!platform_move_to_trash(path)) {
         snprintf(g_error_message, sizeof(g_error_message),
                  "Move to Trash failed, file not deleted");
         return OP_ERROR_UNKNOWN;

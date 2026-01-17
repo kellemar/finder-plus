@@ -279,6 +279,12 @@ bool claude_parse_response(const char *json, ClaudeMessageResponse *resp)
 
         if (tool_use_count > 0) {
             resp->tool_uses = (ClaudeToolUse *)calloc((size_t)tool_use_count, sizeof(ClaudeToolUse));
+            if (!resp->tool_uses) {
+                resp->error = strdup("Memory allocation failed for tool uses");
+                resp->stop_reason = CLAUDE_STOP_ERROR;
+                cJSON_Delete(root);
+                return false;
+            }
             resp->tool_use_count = tool_use_count;
         }
 
@@ -293,10 +299,10 @@ bool claude_parse_response(const char *json, ClaudeMessageResponse *resp)
                 cJSON *text = cJSON_GetObjectItem(block, "text");
                 if (text && cJSON_IsString(text)) {
                     size_t current_len = strlen(resp->content);
-                    size_t text_len = strlen(text->valuestring);
                     size_t available = CLAUDE_MAX_RESPONSE_LEN - current_len - 1;
-                    if (text_len < available) {
-                        strcat(resp->content, text->valuestring);
+                    if (available > 0) {
+                        strncat(resp->content, text->valuestring, available);
+                        resp->content[CLAUDE_MAX_RESPONSE_LEN - 1] = '\0';
                     }
                 }
             } else if (strcmp(type->valuestring, "tool_use") == 0 && resp->tool_uses && tool_idx < tool_use_count) {

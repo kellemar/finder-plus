@@ -320,6 +320,47 @@ static ToolResult execute_file_rename(cJSON *input)
     return result;
 }
 
+// Helper struct for recursive search
+typedef struct {
+    const char *pattern;
+    cJSON *matches;
+    int count;
+    int max_results;  // Limit results to avoid memory issues
+} SearchContext;
+
+// Helper for recursive directory search
+static void search_directory_recursive(const char *dir_path, SearchContext *ctx, int depth)
+{
+    // Limit depth to prevent stack overflow
+    if (depth > 32 || ctx->count >= ctx->max_results) return;
+
+    DIR *dir = opendir(dir_path);
+    if (!dir) return;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL && ctx->count < ctx->max_results) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        char full_path[1024];
+        snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
+
+        // Check if filename matches pattern
+        if (fnmatch(ctx->pattern, entry->d_name, 0) == 0) {
+            cJSON_AddItemToArray(ctx->matches, cJSON_CreateString(full_path));
+            ctx->count++;
+        }
+
+        // Recurse into subdirectories
+        struct stat st;
+        if (stat(full_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+            search_directory_recursive(full_path, ctx, depth + 1);
+        }
+    }
+    closedir(dir);
+}
+
 // Execute file_search tool
 static ToolResult execute_file_search(ToolExecutor *executor __attribute__((unused)), cJSON *input)
 {
@@ -338,40 +379,51 @@ static ToolResult execute_file_search(ToolExecutor *executor __attribute__((unus
         return result;
     }
 
-    cJSON *recursive = cJSON_GetObjectItem(input, "recursive");
-    (void)recursive;  // TODO: Implement recursive search
+    cJSON *recursive_item = cJSON_GetObjectItem(input, "recursive");
+    bool do_recursive = recursive_item && cJSON_IsTrue(recursive_item);
 
-    // Simple implementation - search in directory
     cJSON *output = cJSON_CreateObject();
     cJSON *matches = cJSON_CreateArray();
-    int match_count = 0;
 
-    DIR *dir = opendir(path->valuestring);
-    if (dir) {
-        struct dirent *entry;
-        while ((entry = readdir(dir)) != NULL) {
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-                continue;
-            }
+    SearchContext ctx = {
+        .pattern = pattern->valuestring,
+        .matches = matches,
+        .count = 0,
+        .max_results = 1000  // Prevent runaway searches
+    };
 
-            if (fnmatch(pattern->valuestring, entry->d_name, 0) == 0) {
-                char full_path[1024];
-                snprintf(full_path, sizeof(full_path), "%s/%s", path->valuestring, entry->d_name);
-                cJSON_AddItemToArray(matches, cJSON_CreateString(full_path));
-                match_count++;
+    if (do_recursive) {
+        search_directory_recursive(path->valuestring, &ctx, 0);
+    } else {
+        // Non-recursive: search only in specified directory
+        DIR *dir = opendir(path->valuestring);
+        if (dir) {
+            struct dirent *entry;
+            while ((entry = readdir(dir)) != NULL && ctx.count < ctx.max_results) {
+                if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                    continue;
+                }
+
+                if (fnmatch(pattern->valuestring, entry->d_name, 0) == 0) {
+                    char full_path[1024];
+                    snprintf(full_path, sizeof(full_path), "%s/%s", path->valuestring, entry->d_name);
+                    cJSON_AddItemToArray(matches, cJSON_CreateString(full_path));
+                    ctx.count++;
+                }
             }
+            closedir(dir);
         }
-        closedir(dir);
     }
 
     cJSON_AddItemToObject(output, "matches", matches);
-    cJSON_AddNumberToObject(output, "count", match_count);
+    cJSON_AddNumberToObject(output, "count", ctx.count);
     cJSON_AddStringToObject(output, "pattern", pattern->valuestring);
+    cJSON_AddBoolToObject(output, "recursive", do_recursive);
 
     char *json_str = cJSON_Print(output);
     cJSON_Delete(output);
 
-    tool_result_set_success(&result, json_str, match_count);
+    tool_result_set_success(&result, json_str, ctx.count);
     free(json_str);
 
     return result;

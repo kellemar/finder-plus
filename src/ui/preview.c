@@ -190,9 +190,23 @@ static bool preview_start_video_playback(PreviewState *preview)
     // Keep pipe blocking for the thread
     preview->video_frame_width = frame_width;
     preview->video_frame_height = frame_height;
-    size_t buffer_size = frame_width * frame_height * 3;
+    size_t buffer_size = (size_t)frame_width * (size_t)frame_height * 3;
     preview->video_frame_buffer = malloc(buffer_size);
+    if (!preview->video_frame_buffer) {
+        video_stop_inpane_playback(preview->video_decoder_pid, preview->video_pipe_fd);
+        preview->video_pipe_fd = -1;
+        preview->video_decoder_pid = 0;
+        return false;
+    }
     preview->video_decode_buffer = malloc(buffer_size);
+    if (!preview->video_decode_buffer) {
+        free(preview->video_frame_buffer);
+        preview->video_frame_buffer = NULL;
+        video_stop_inpane_playback(preview->video_decoder_pid, preview->video_pipe_fd);
+        preview->video_pipe_fd = -1;
+        preview->video_decoder_pid = 0;
+        return false;
+    }
     preview->video_inpane_active = true;
     preview->video_paused = false;
     preview->video_frame_ready = false;

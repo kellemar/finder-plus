@@ -109,15 +109,30 @@ SummaryCache *summary_cache_create(const char *cache_path)
         strncpy(expanded_path, path, sizeof(expanded_path) - 1);
     }
 
-    // Create directory if needed
+    // Create directory if needed (recursive mkdir without shell injection)
     char *dir = strdup(expanded_path);
+    if (!dir) {
+        free(cache);
+        return NULL;
+    }
     char *last_slash = strrchr(dir, '/');
     if (last_slash) {
         *last_slash = '\0';
-        // Simple mkdir -p
-        char cmd[1024];
-        snprintf(cmd, sizeof(cmd), "mkdir -p '%s' 2>/dev/null", dir);
-        system(cmd);
+        // Recursive mkdir using POSIX API - safe from shell injection
+        char tmp[512];
+        size_t len = strlen(dir);
+        if (len < sizeof(tmp)) {
+            strncpy(tmp, dir, sizeof(tmp) - 1);
+            tmp[sizeof(tmp) - 1] = '\0';
+            for (char *p = tmp + 1; *p; p++) {
+                if (*p == '/') {
+                    *p = '\0';
+                    mkdir(tmp, 0755);
+                    *p = '/';
+                }
+            }
+            mkdir(tmp, 0755);
+        }
     }
     free(dir);
 

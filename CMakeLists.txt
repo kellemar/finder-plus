@@ -142,6 +142,7 @@ set(SOURCES
     # Platform-specific
     src/platform/fsevents.c
     src/platform/clipboard.m
+    src/platform/trash.m
 )
 
 # Main executable
@@ -276,6 +277,7 @@ set(TEST_SOURCES
     # Platform-specific
     src/platform/fsevents.c
     src/platform/clipboard.m
+    src/platform/trash.m
 )
 
 add_executable(test_runner ${TEST_SOURCES})
