@@ -118,10 +118,11 @@ Configuration is stored at `~/.config/finder-plus/config.json`. See [docs/CONFIG
 
 ### AI Setup
 
-To enable Claude AI features, set your API key:
+To enable Claude AI features and Google's Nano Banana image generation, set your API key:
 
 ```bash
 export CLAUDE_API_KEY="your-api-key-here"
+export GEMINI_API_KEY="your-gemini-key-here"
 ```
 
 Or add it to your config file. Local AI features (semantic search, visual search, duplicate detection) work without an API key.
